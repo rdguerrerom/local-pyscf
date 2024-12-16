@@ -196,7 +196,6 @@ def get_dominating_contributions(weight_lmo_atom, criterion=0.98, log=None):
             ))
     return result
 
-
 def iter_local_conventional(mol, mo_occ):
     """
     Performs iterations over conventional pair subspaces of local MP2.
@@ -208,7 +207,6 @@ def iter_local_conventional(mol, mo_occ):
         For each pair, returns molecular orbital indexes i, j, a set of atomic indexes corresponding to this pair and
         a numpy array with atomic orbital indexes corresponding to this pair.
     """
-
     ao_ownership = get_ao_ownership_matrix(mol)
     mulliken_ao_lmo = get_mulliken(mo_occ, mol.intor_symmetric('int1e_ovlp'))
     mulliken_lmo_atom = numpy.dot(mulliken_ao_lmo.T, ao_ownership)
@@ -218,10 +216,16 @@ def iter_local_conventional(mol, mo_occ):
         a1 = lmo_ownership[i]
         for j in range(mo_occ.shape[1]):
             a2 = lmo_ownership[j]
-            local_atoms = sorted(set(a1) | set(a2))
+            # Debug print
+            print(f"Pair ({i},{j}): a1 = {a1}, a2 = {a2}")            
+            # For diagonal pairs, only use the localization atoms of that orbital
+            if i == j:
+                local_atoms = sorted(set(a1))
+            else:
+                local_atoms = sorted(set(a1) | set(a2))
+            
             orbs = ao_ownership[:, local_atoms].sum(axis=1)
             yield i, j, local_atoms, numpy.argwhere(orbs)[:, 0]
-
 
 class AbstractLMP2IntegralProvider(common.SimpleCachingIntegralProvider):
 

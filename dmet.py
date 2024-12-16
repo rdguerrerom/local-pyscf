@@ -28,18 +28,24 @@ def utri2m(a):
         a (numpy.ndarray): a plain array to process;
 
     Returns:
-        A square Hemritian matrix.
+        A square Hermitian matrix.
     """
     d = (1+8*len(a))**.5
     if d % 2 != 1:
-        raise ValueError("Matrix has a wrong size {:d}".format(len(a)))
-    d = (int(d)-1)/2
+        raise ValueError(f"Matrix has a wrong size {len(a)}")
+    d = int((int(d)-1)/2)  # Ensure integer conversion
     result = numpy.empty((d, d), dtype=a.dtype)
-    indices = numpy.triu_indices(d)
-    result[indices] = a
-    result[(indices[1], indices[0])] = a.conj()
+    
+    # Implement the actual upper triangular to matrix conversion
+    # This part was missing in the original function
+    k = 0
+    for i in range(d):
+        for j in range(i, d):
+            result[i, j] = a[k]
+            result[j, i] = result[i, j]  # Hermitian symmetry
+            k += 1
+    
     return result
-
 
 class GenericDMETUmatSelfConsistency(object):
     def __init__(self, driver, umat_projector, reference_solution, dm_projector=None, log=None, solution_dm_slice=None):

@@ -63,6 +63,51 @@ class AbstractIntegralProvider(object):
         self.__mol__ = mol
         self.__ao_ownership__ = numpy.array(tuple(i[0] for i in self.__mol__.ao_labels(fmt=False)))
 
+    def _get_basis_indices(self, atoms):
+        """
+        Retrieves the indices of atomic basis functions corresponding to the given subset of atoms.
+
+        Args:
+            atoms (list, tuple, int): Subset of atom indices.
+
+        Returns:
+            numpy.ndarray: Array of basis function indices corresponding to the given atoms.
+        """
+        if isinstance(atoms, int):  # Handle single atom case
+            atoms = [atoms]
+
+        basis_indices = []
+        for atom in atoms:
+            # Ensure atom index is valid
+            if atom < 0 or atom >= len(self.__mol__.aoslice_by_atom()):
+                raise ValueError(f"Invalid atom index: {atom}")
+
+            # Retrieve basis function range for the atom
+            start, end = self.__mol__.aoslice_by_atom()[atom][:2]
+            basis_indices.extend(range(start, end))
+
+        return numpy.array(basis_indices)
+
+    def intor_atoms(self, name, *atoms, **kwargs):
+        """
+        A version of `pyscf.mole.Mole.intor` accepting lists of atoms instead of shells.
+        Args:
+            name (str): integral name;
+            *atoms (nested list): atoms lists;
+            **kwargs: keywords passed to `pyscf.mole.Mole.intor`;
+
+        Returns:
+            An array or tensor with integrals.
+        """
+        # Get the atomic basis function indices for each atom set
+        slices = [self._get_basis_indices(a) for a in atoms]
+
+        # Compute the full integral tensor
+        full_tensor = self.__mol__.intor(name, **kwargs)
+
+        # Slice the tensor according to the atom subsets
+        return full_tensor[numpy.ix_(*slices)]
+
     def get_atom_basis(self, atoms, domain=None):
         """
         Retrieves basis function indices corresponding to the list of atoms.
@@ -89,7 +134,6 @@ class AbstractIntegralProvider(object):
         Retrieves a block slice corresponding to given atoms sets.
         Args:
             atoms (list, tuple): subsets of atoms where the basis functions of each dimension reside;
-            dims (int): the number of dimensions;
 
         Returns:
             A slice for the diagonal block.
@@ -97,10 +141,13 @@ class AbstractIntegralProvider(object):
         return numpy.ix_(*tuple(self.get_atom_basis(i) for i in atoms))
 
     def __dressed_atoms__(self, atoms):
+        """
+        Ensures the atom list is a tuple of atom indices.
+        """
         if atoms is None:
             return tuple(range(self.__mol__.natm))
-        elif isinstance(atoms, int):
-            return atoms,
+        elif isinstance(atoms, (int, numpy.integer)):
+            return (atoms,)  # Wrap single integer in a tuple
         else:
             return tuple(atoms)
 
@@ -127,25 +174,12 @@ class AbstractIntegralProvider(object):
         """
         Retrieves the full basis size of each atom.
         Args:
-            atoms (int): atom ID;
+            atom (int): atom ID;
 
         Returns:
             The total number of basis functions.
         """
         return sum(self.__mol__.bas_len_cart(i) for i in self.__mol__.atom_shell_ids(atom))
-
-    def intor_atoms(self, name, *atoms, **kwargs):
-        """
-        A version of `pyscf.mole.Mole.intor` accepting lists of atoms instead of shells.
-        Args:
-            name (str): integral name;
-            *atoms (nested list): atoms lists;
-            **kwargs: keywords passed to `pyscf.mole.Mole.intor`;
-
-        Returns:
-            An array or tensor with integrals.
-        """
-        raise NotImplementedError
 
     def get_ovlp(self, atoms1, atoms2):
         """
@@ -598,6 +632,14 @@ class ModelFCI(FCISolver):
         self.e_tot = None
         self.psi = None
         self._keys = set(self.__dict__.keys())
+
+    @property
+    def e_tot(self):
+        return self._e_tot
+    
+    @e_tot.setter
+    def e_tot(self, value):
+        self._e_tot = value
 
     def kernel(self, **kwargs):
         e, psi = FCISolver.kernel(
